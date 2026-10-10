@@ -1,0 +1,5 @@
+[Desktop Entry]
+Name=Slick Greeter (macOS)
+Comment=La ventana de inicio de sesión de macOS Catalina, sobre slick-greeter
+Exec=/usr/local/sbin/slick-greeter-mac
+Type=Application

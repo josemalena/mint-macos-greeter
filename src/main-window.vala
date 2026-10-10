@@ -36,6 +36,7 @@ public class MainWindow : Gtk.Window
     private bool do_resize;
 
     public ListStack stack;
+    private LoginMac login_mac;
 
     // Menubar is smaller, but with shadow, we reserve more space
     public const int MENUBAR_HEIGHT = 32;
@@ -102,61 +103,16 @@ public class MainWindow : Gtk.Window
         content_box.show ();
         login_box.add (content_box);
 
-        var content_align = UGSettings.get_string(UGSettings.KEY_CONTENT_ALIGN);
-        var x_align = 0.5f;
-
-        if (content_align == "left")
-        {
-            x_align = 0.0f;
-        }
-        else if (content_align == "right")
-        {
-            x_align = 1.0f;
-        }
-
-        var align = new Gtk.Alignment (x_align, 0.0f, 0.0f, 1.0f);
-
-        if (content_align == "center")
-        {
-            // offset for back button
-            align.margin_right = grid_size;
-        }
-
-        align.show ();
-        content_box.add (align);
-
-        hbox = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 0);
-        hbox.expand = true;
-        hbox.show ();
-        align.add (hbox);
-
-        align = new Gtk.Alignment (0.5f, 0.5f, 0.0f, 0.0f);
-        // Hack to avoid gtk 3.20's new allocate logic, which messes us up.
-        align.resize_mode = Gtk.ResizeMode.QUEUE;
-        align.set_size_request (grid_size, -1);
-        align.margin_bottom = MENUBAR_HEIGHT; /* offset for menubar at top */
-        align.show ();
-        hbox.add (align);
+        /* mint-macos: el centro es la ventana de inicio de la Mac (LoginMac),
+         * no la lista de usuarios de Unity. La pila queda vacía; solo la usaba
+         * esa lista. */
+        login_mac = new LoginMac (background);
+        login_mac.expand = true;
+        login_mac.show ();
+        content_box.add (login_mac);
 
         back_button = new FlatButton ();
-        back_button.get_accessible ().set_name (_("Back"));
-        Gtk.button_set_focus_on_click (back_button, false);
-        var image = new Gtk.Image.from_file (Path.build_filename (Config.PKGDATADIR, "arrow_left.svg", null));
-        image.show ();
-        back_button.set_size_request (grid_size - GreeterList.BORDER * 2, grid_size - GreeterList.BORDER * 2);
-        back_button.add (image);
-        back_button.clicked.connect (pop_list);
-        align.add (back_button);
-
-        align = new Gtk.Alignment (0.0f, 0.5f, 0.0f, 1.0f);
-        align.show ();
-        hbox.add (align);
-
         stack = new ListStack ();
-        stack.show ();
-        align.add (stack);
-
-        add_user_list ();
 
         primary_monitor = null;
         do_resize = false;
@@ -213,14 +169,7 @@ public class MainWindow : Gtk.Window
     {
         base.size_allocate (allocation);
 
-        if (content_box != null)
-        {
-            var content_align = UGSettings.get_string(UGSettings.KEY_CONTENT_ALIGN);
-            content_box.margin_left = get_grid_offset (get_allocated_width ()) + (content_align == "left" ? grid_size : 0);
-            content_box.margin_right = get_grid_offset (get_allocated_width ()) + (content_align == "right" ? grid_size : 0);
-            content_box.margin_top = get_grid_offset (get_allocated_height ());
-            content_box.margin_bottom = get_grid_offset (get_allocated_height ());
-        }
+        /* LoginMac ocupa la pantalla entera: sin los márgenes de la rejilla. */
     }
 
     public override void realize ()
@@ -369,6 +318,27 @@ public class MainWindow : Gtk.Window
 
     public override bool key_press_event (Gdk.EventKey event)
     {
+        if (login_mac != null)
+        {
+            switch (event.keyval)
+            {
+            case Gdk.Key.Escape:
+                if (shutdown_dialog != null)
+                    shutdown_dialog.cancel ();
+                else if (login_box.sensitive)
+                    login_mac.cancelar ();
+                return true;
+            case Gdk.Key.PowerOff:
+                show_shutdown_dialog (ShutdownDialogType.SHUTDOWN);
+                return true;
+            case Gdk.Key.F10:
+                if (login_box.sensitive)
+                    menubar.select_first (false);
+                return true;
+            }
+            return base.key_press_event (event);
+        }
+
         var top = stack.top ();
 
         if (stack.top () is UserList)

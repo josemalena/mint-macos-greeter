@@ -80,7 +80,7 @@ public class SlickGreeter
         if (!connected && !test_mode)
             Posix.exit (Posix.EXIT_FAILURE);
 
-        var state_dir = Path.build_filename (Environment.get_user_cache_dir (), "slick-greeter");
+        var state_dir = Path.build_filename (Environment.get_user_cache_dir (), "slick-greeter-mac");
         DirUtils.create_with_parents (state_dir, 0775);
 
         var xdg_seat = GLib.Environment.get_variable("XDG_SEAT");
@@ -99,7 +99,7 @@ public class SlickGreeter
         }
 
         main_window = new MainWindow ();
-        main_window.destroy.connect(() => { kill_fake_wm (); });
+        main_window.destroy.connect(() => { if (!test_mode) kill_fake_wm (); });
         main_window.delete_event.connect(() =>
         {
             Gtk.main_quit();
@@ -126,7 +126,9 @@ public class SlickGreeter
         });
         dbus_object.close_dialog.connect ((type) => { main_window.close_shutdown_dialog (); });
 
-        start_fake_wm ();
+        /* En prueba no: le daría el foco a cada ventana nueva de la sesión. */
+        if (!test_mode)
+            start_fake_wm ();
         Gdk.threads_add_idle (ready_cb);
     }
 
@@ -715,8 +717,18 @@ public class SlickGreeter
         log_timer = new Timer ();
         Log.set_default_handler (log_cb);
 
+        /* mint-macos: en --test-mode el greeter corre dentro de la sesión de
+         * alguien. Lo de abajo (dconf, distribución del teclado, Bloq Num,
+         * toque del touchpad, cursor de la pantalla) le cambiaría la sesión a
+         * esa persona, así que en prueba no se hace. */
+        var prueba = false;
+        foreach (var a in args)
+            if (a == "--test-mode")
+                prueba = true;
+
         /* Override dconf settings with /etc settings */
-        UGSettings.apply_conf_settings ();
+        if (!prueba)
+            UGSettings.apply_conf_settings ();
 
         var hidpi = UGSettings.get_string (UGSettings.KEY_ENABLE_HIDPI);
         var cursor_scale = 1;
@@ -731,16 +743,18 @@ public class SlickGreeter
         }
 
         /* Set the keyboard layout */
-        set_keyboard_layout ();
+        if (!prueba)
+            set_keyboard_layout ();
 
         /* Set the numlock state */
-        if (UGSettings.get_boolean (UGSettings.KEY_ACTIVATE_NUMLOCK)) {
+        if (!prueba && UGSettings.get_boolean (UGSettings.KEY_ACTIVATE_NUMLOCK)) {
             debug ("Activating numlock");
             activate_numlock ();
         }
 
         /* Enable touchpad tap-to-click */
-        enable_tap_to_click ();
+        if (!prueba)
+            enable_tap_to_click ();
 
         Gtk.init (ref args);
 
@@ -748,7 +762,8 @@ public class SlickGreeter
 
         /* Set the cursor to not be the crap default */
         debug ("Setting cursor");
-        Gdk.get_default_root_window ().set_cursor (new Gdk.Cursor.for_display (Gdk.Display.get_default (), Gdk.CursorType.LEFT_PTR));
+        if (!prueba)
+            Gdk.get_default_root_window ().set_cursor (new Gdk.Cursor.for_display (Gdk.Display.get_default (), Gdk.CursorType.LEFT_PTR));
 
         bool do_show_version = false;
         bool do_test_mode = false;

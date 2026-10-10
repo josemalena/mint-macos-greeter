@@ -17,6 +17,7 @@ slick_greeter_sources = files(
     'greeter-list.vala',
     'idle-monitor.vala',
     'list-stack.vala',
+    'login-mac.vala',
     'main-window.vala',
     'menu.vala',
     'menubar.vala',
@@ -63,7 +64,7 @@ vala_args = [
 ]
 
 executable(
-    'slick-greeter',
+    'slick-greeter-mac',
     slick_greeter_sources,
     dependencies: dependencies,
     include_directories: config_h_dir,

@@ -33,21 +33,9 @@ install_data(
     install_dir: pkgdatadir,
 )
 
+# El esquema GSettings es el del slick-greeter de Mint (ya instalado): este
+# fork lo comparte y no lo instala. Tampoco los man.
 install_data(
-    'x.dm.slick-greeter.gschema.xml',
-    install_dir: datadir / 'glib-2.0' / 'schemas',
-)
-
-install_data(
-    'slick-greeter.desktop',
+    'slick-greeter-mac.desktop',
     install_dir: datadir / 'xgreeters',
 )
-
-man_files = [
-    'slick-greeter-set-keyboard-layout.1',
-    'slick-greeter-check-hidpi.1',
-    'slick-greeter-enable-tap-to-click.1',
-    'slick-greeter.8',
-]
-
-install_man(man_files)
