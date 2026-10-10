@@ -113,7 +113,9 @@ public class UGSettings
     public static void apply_conf_settings ()
     {
         try {
-            var path = "/etc/lightdm/slick-greeter-mac.conf";
+            /* En pruebas se puede apuntar a otro .conf (con GSETTINGS_BACKEND=memory,
+             * para no escribir el dconf de nadie). */
+            var path = Environment.get_variable ("SLICK_GREETER_MAC_CONF") ?? "/etc/lightdm/slick-greeter-mac.conf";
             var gsettings = new Settings (SCHEMA);
             var keyfile = new KeyFile ();
 

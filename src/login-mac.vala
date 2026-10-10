@@ -37,6 +37,7 @@ public class LoginMac : Gtk.Overlay
     private AvatarMac avatar;
     private Gtk.Label nombre;
     private Gtk.Entry clave;
+    private Gtk.Label guia;
     private Gtk.Entry? campo_usuario = null;
     private Gtk.Label pista;
 
@@ -92,8 +93,8 @@ public class LoginMac : Gtk.Overlay
     {
         centro = new Gtk.Box (Gtk.Orientation.VERTICAL, 0);
         centro.halign = Gtk.Align.CENTER;
-        /* El bloque (avatar a campo) va 35 px por encima del centro. */
-        centro.margin_bottom = 70;
+        /* El avatar empieza 169 px sobre el centro de la pantalla (Monterey). */
+        centro.margin_bottom = 102;
 
         avatar = new AvatarMac (AVATAR);
         avatar.halign = Gtk.Align.CENTER;
@@ -104,7 +105,8 @@ public class LoginMac : Gtk.Overlay
         nombre.justify = Gtk.Justification.CENTER;
         nombre.wrap = true;
         nombre.wrap_mode = Pango.WrapMode.WORD;
-        nombre.max_width_chars = 18;
+        /* La Mac parte el nombre a unos 175 px: «José Alberto de la / Cruz Malena». */
+        nombre.max_width_chars = 15;
         nombre.halign = Gtk.Align.CENTER;
         nombre.margin_top = 31;
         centro.pack_start (nombre, false, false, 0);
@@ -113,20 +115,33 @@ public class LoginMac : Gtk.Overlay
         clave.get_style_context ().add_class ("clave-mac");
         clave.visibility = false;
         clave.invisible_char = '•';
-        clave.placeholder_text = "Enter Password";
+        clave.width_chars = 1;  /* si no, GTK pide más ancho que los 160 */
         clave.set_size_request (ANCHO_CAMPO, ALTO_CAMPO);
         clave.halign = Gtk.Align.CENTER;
-        clave.margin_top = 18;
         clave.max_length = 1024;
+        /* «Enter Password» se ve aunque el campo tenga el foco, como en la Mac
+         * (GTK3 esconde su placeholder al enfocar). */
+        guia = new Gtk.Label ("Enter Password");
+        guia.get_style_context ().add_class ("guia-mac");
+        guia.halign = Gtk.Align.START;
+        guia.valign = Gtk.Align.CENTER;
+        guia.margin_start = 14;
+        var con_guia = new Gtk.Overlay ();
+        con_guia.add (clave);
+        con_guia.add_overlay (guia);
+        con_guia.set_overlay_pass_through (guia, true);
+        con_guia.halign = Gtk.Align.CENTER;
+        con_guia.margin_top = 18;
         clave.changed.connect (() => {
             clave.secondary_icon_pixbuf = clave.text.length > 0 ? flecha () : null;
+            guia.visible = clave.text.length == 0;
         });
         clave.activate.connect (enviar);
         clave.icon_press.connect ((pos) => {
             if (pos == Gtk.EntryIconPosition.SECONDARY)
                 enviar ();
         });
-        centro.pack_start (clave, false, false, 0);
+        centro.pack_start (con_guia, false, false, 0);
 
         pista = new Gtk.Label ("");
         pista.get_style_context ().add_class ("pista-mac");
@@ -237,7 +252,10 @@ public class LoginMac : Gtk.Overlay
         usuario = u;
         otro = false;
         nombre.label = nombre_de (u);
-        avatar.set_imagen (u.image);
+        /* En prueba la foto puede venir de afuera (la de AccountsService la pone
+         * el instalador, y el greeter de prueba corre como otro usuario). */
+        var foto = SlickGreeter.singleton.test_mode ? Environment.get_variable ("SLICK_GREETER_MAC_AVATAR") : null;
+        avatar.set_imagen (foto ?? u.image);
         quitar_campo_usuario ();
         empezar ();
     }
@@ -253,6 +271,7 @@ public class LoginMac : Gtk.Overlay
             campo_usuario = new Gtk.Entry ();
             campo_usuario.get_style_context ().add_class ("clave-mac");
             campo_usuario.placeholder_text = "Name";
+            campo_usuario.width_chars = 1;
             campo_usuario.set_size_request (ANCHO_CAMPO, ALTO_CAMPO);
             campo_usuario.halign = Gtk.Align.CENTER;
             campo_usuario.margin_top = 31;
@@ -284,6 +303,7 @@ public class LoginMac : Gtk.Overlay
         pendiente = null;
         pista.hide ();
         clave.text = "";
+        guia.visible = true;
         clave.sensitive = true;
         vistas.set_visible_child_name ("usuario");
         botones_energia.visible = !hay_varios;
@@ -518,6 +538,24 @@ public class LoginMac : Gtk.Overlay
             entry.clave-mac:focus { box-shadow: none; border: none; }
             entry.clave-mac:disabled { color: rgba(255, 255, 255, 0.6); background-color: rgba(255, 255, 255, 0.30); }
             entry.clave-mac image { color: #ffffff; }
+            .guia-mac {
+                font-family: ".SF NS", sans-serif;
+                font-size: 13px;
+                color: rgba(255, 255, 255, 0.62);
+            }
+            /* La barra de arriba de la Mac no tiene franja: solo el texto. */
+            menubar, menubar > menuitem {
+                background: none;
+                background-color: transparent;
+                box-shadow: none;
+                border: none;
+            }
+            menubar, menubar label {
+                font-family: ".SF NS", sans-serif;
+                font-size: 13px;
+                color: #ffffff;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+            }
             .pista-mac {
                 font-family: ".SF NS", sans-serif;
                 font-size: 13px;
@@ -683,11 +721,15 @@ public class BotonMac : Gtk.Button
             c.stroke ();
             break;
         case Icono.DORMIR:
-            /* luna */
+            /* La luna: un círculo al que se le recorta otro corrido. */
+            c.push_group ();
             c.arc (r, r, 7.5, 0, 2 * Math.PI);
-            c.arc_negative (r + 4.5, r - 3.5, 6.5, 2 * Math.PI, 0);
-            c.set_fill_rule (Cairo.FillRule.EVEN_ODD);
             c.fill ();
+            c.set_operator (Cairo.Operator.DEST_OUT);
+            c.arc (r + 4.2, r - 3.4, 6.4, 0, 2 * Math.PI);
+            c.fill ();
+            c.pop_group_to_source ();
+            c.paint ();
             break;
         }
         return false;

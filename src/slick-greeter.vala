@@ -727,7 +727,7 @@ public class SlickGreeter
                 prueba = true;
 
         /* Override dconf settings with /etc settings */
-        if (!prueba)
+        if (!prueba || Environment.get_variable ("GSETTINGS_BACKEND") == "memory")
             UGSettings.apply_conf_settings ();
 
         var hidpi = UGSettings.get_string (UGSettings.KEY_ENABLE_HIDPI);

@@ -120,18 +120,9 @@ public class MainWindow : Gtk.Window
         only_on_monitor = UGSettings.get_string(UGSettings.KEY_ONLY_ON_MONITOR);
         monitor_setting_ok = only_on_monitor == "auto";
 
-        if (SlickGreeter.singleton.test_mode)
-        {
-            /* Simulate an 800x600 monitor to the left of a 640x480 monitor */
-            monitors = new List<Monitor> ();
-            monitors.append (new Monitor (0, 0, 800, 600));
-            monitors.append (new Monitor (800, 120, 640, 480));
-            background.set_monitors (monitors);
-            move_to_monitor (monitors.nth_data (0));
-            resize (background.width, background.height);
-        }
-        else
-        {
+        /* mint-macos: también en prueba se usa la pantalla real (se prueba
+         * dentro de un Xephyr del tamaño que se quiera medir). */
+                {
             var screen = get_screen ();
             screen.monitors_changed.connect (monitors_changed_cb);
             monitors_changed_cb (screen);
