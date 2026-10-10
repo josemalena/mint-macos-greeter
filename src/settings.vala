@@ -55,8 +55,42 @@ public class UGSettings
     public const string KEY_ONSCREEN_KEYBOARD_LAYOUT = "onscreen-keyboard-layout";
     public const string KEY_CONTENT_ALIGN = "content-align";
 
+    /* mint-macos: el .conf manda. slick-greeter copia el .conf a dconf y lee
+     * de dconf; si dconf no puede escribir (un greeter sin bus de sesión) se
+     * quedan los valores por defecto del esquema, que es el de Mint. Aquí se
+     * lee el .conf primero y dconf es el respaldo. */
+    private static KeyFile? _conf = null;
+    private static bool _conf_leido = false;
+    private static KeyFile? conf ()
+    {
+        if (!_conf_leido)
+        {
+            _conf_leido = true;
+            var ruta = Environment.get_variable ("SLICK_GREETER_MAC_CONF") ?? "/etc/lightdm/slick-greeter-mac.conf";
+            var k = new KeyFile ();
+            try
+            {
+                k.load_from_file (ruta, KeyFileFlags.NONE);
+                _conf = k;
+            }
+            catch (Error e)
+            {
+                _conf = null;
+            }
+        }
+        return _conf;
+    }
+
+    private static bool en_conf (string key)
+    {
+        var k = conf ();
+        try { return k != null && k.has_key (GROUP_NAME, key); } catch (Error e) { return false; }
+    }
+
     public static bool get_boolean (string key)
     {
+        if (en_conf (key))
+            try { return conf ().get_boolean (GROUP_NAME, key); } catch (Error e) {}
         var gsettings = new Settings (SCHEMA);
         return gsettings.get_boolean (key);
     }
@@ -64,6 +98,8 @@ public class UGSettings
     /* LP: 1006497 - utility function to make sure we have the key before trying to read it (which will segfault if the key isn't there) */
     public static bool safe_get_boolean (string key, bool default)
     {
+        if (en_conf (key))
+            try { return conf ().get_boolean (GROUP_NAME, key); } catch (Error e) {}
         var gsettings = new Settings (SCHEMA);
         string[] keys = gsettings.list_keys ();
         foreach (var k in keys)
@@ -76,18 +112,24 @@ public class UGSettings
 
     public static int get_integer (string key)
     {
+        if (en_conf (key))
+            try { return conf ().get_integer (GROUP_NAME, key); } catch (Error e) {}
         var gsettings = new Settings (SCHEMA);
         return gsettings.get_int (key);
     }
 
     public static double get_double (string key)
     {
+        if (en_conf (key))
+            try { return conf ().get_double (GROUP_NAME, key); } catch (Error e) {}
         var gsettings = new Settings (SCHEMA);
         return gsettings.get_double (key);
     }
 
     public static string get_string (string key)
     {
+        if (en_conf (key))
+            try { return conf ().get_string (GROUP_NAME, key); } catch (Error e) {}
         var gsettings = new Settings (SCHEMA);
         return gsettings.get_string (key);
     }

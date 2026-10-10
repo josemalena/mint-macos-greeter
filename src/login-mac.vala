@@ -73,6 +73,8 @@ public class LoginMac : Gtk.Overlay
         armar_fila ();
         armar_abajo ();
 
+        poner_fondo ();
+
         SlickGreeter.singleton.show_prompt.connect (prompt_cb);
         SlickGreeter.singleton.show_message.connect (mensaje_cb);
         SlickGreeter.singleton.authentication_complete.connect (completa_cb);
@@ -215,6 +217,26 @@ public class LoginMac : Gtk.Overlay
 
         abajo.show_all ();
         add_overlay (abajo);
+    }
+
+    /* El fondo sale del .conf directo. slick-greeter lo pasa por dconf y lo
+     * vuelve a leer, y si dconf no puede escribir (un greeter sin bus de
+     * sesión, como el de lightdm --test-mode) queda el fondo de Mint. */
+    private void poner_fondo ()
+    {
+        var ruta = Environment.get_variable ("SLICK_GREETER_MAC_CONF") ?? "/etc/lightdm/slick-greeter-mac.conf";
+        try
+        {
+            var k = new KeyFile ();
+            k.load_from_file (ruta, KeyFileFlags.NONE);
+            var fondo = k.get_string ("Greeter", "background");
+            if (fondo != null && fondo != "" && FileUtils.test (fondo, FileTest.EXISTS))
+                background.current_background = fondo;
+        }
+        catch (Error e)
+        {
+            debug ("Fondo de %s: %s", ruta, e.message);
+        }
     }
 
     /* ── Usuarios ────────────────────────────────────────────────────── */

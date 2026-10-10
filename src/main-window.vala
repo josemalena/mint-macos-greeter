@@ -66,13 +66,9 @@ public class MainWindow : Gtk.Window
         /* Box for menubar shadow */
         var menubox = new Gtk.EventBox ();
         var menualign = new Gtk.Alignment (0.0f, 0.0f, 1.0f, 0.0f);
-        var shadow_path = Path.build_filename (Config.PKGDATADIR,
-                                               "shadow.png", null);
         var shadow_style = "";
-        if (FileUtils.test (shadow_path, FileTest.EXISTS))
-        {
-            shadow_style = "background-image: url('%s');background-repeat: repeat;".printf(shadow_path);
-        }
+        /* mint-macos: la barra de arriba de la Mac no tiene sombra; shadow.png
+         * dejaba una franja oscura. */
         try
         {
             var style = new Gtk.CssProvider ();
