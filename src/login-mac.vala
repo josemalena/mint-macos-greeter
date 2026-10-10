@@ -202,11 +202,11 @@ public class LoginMac : Gtk.Overlay
 
         botones_energia = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 48);
         if (LightDM.get_can_suspend ())
-            botones_energia.pack_start (new BotonMac ("Sleep", BotonMac.Icono.DORMIR, () => { energia ("suspend"); }), false, false, 0);
+            botones_energia.pack_start (new BotonMac ("Sleep", BotonMac.Icono.DORMIR, () => { energia ("suspend"); }, "Sleep"), false, false, 0);
         if (LightDM.get_can_restart ())
-            botones_energia.pack_start (new BotonMac ("Restart", BotonMac.Icono.REINICIAR, () => { energia ("restart"); }), false, false, 0);
+            botones_energia.pack_start (new BotonMac ("Restart", BotonMac.Icono.REINICIAR, () => { energia ("restart"); }, "Restart"), false, false, 0);
         if (LightDM.get_can_shutdown ())
-            botones_energia.pack_start (new BotonMac ("Shut Down", BotonMac.Icono.APAGAR, () => { energia ("shutdown"); }), false, false, 0);
+            botones_energia.pack_start (new BotonMac ("Shut Down", BotonMac.Icono.APAGAR, () => { energia ("shutdown"); }, "ShutDown"), false, false, 0);
         abajo.pack_start (botones_energia, false, false, 0);
 
         boton_cancelar = new BotonMac ("Cancel", BotonMac.Icono.CANCELAR, () => { cancelar (); });
@@ -652,19 +652,25 @@ public class AvatarMac : Gtk.DrawingArea
     }
 }
 
-/* Los botones de abajo: un círculo de 35 px blanco al 19 % con su dibujo y la
- * etiqueta debajo. */
+/* Los botones de abajo, con la etiqueta debajo. Si están los de la Mac
+ * (loginwindow.app: Restart, ShutDown y Sleep, que login/desde-mac.sh saca y
+ * login/instalar.sh deja en PKGDATADIR/mac), se pinta esa imagen; si no, o
+ * para Cancel, que la Mac no trae, un círculo blanco al 19 % con el dibujo. */
 public class BotonMac : Gtk.Button
 {
     public enum Icono { DORMIR, REINICIAR, APAGAR, CANCELAR }
 
-    private const int TAM = 35;
+    /* Los de la Mac son de 56 px a 1x con el círculo de 54; el dibujo va igual. */
+    private const int TAM = 56;
     private Icono icono;
     private Gtk.DrawingArea dibujo;
+    private Gdk.Pixbuf? imagen = null;
 
-    public BotonMac (string texto, Icono icono, owned Callback al_pulsar)
+    public BotonMac (string texto, Icono icono, owned Callback al_pulsar, string? archivo_mac = null)
     {
         this.icono = icono;
+        if (archivo_mac != null)
+            imagen = cargar_mac (archivo_mac);
         get_style_context ().add_class ("boton-mac");
         relief = Gtk.ReliefStyle.NONE;
         can_focus = false;
@@ -686,14 +692,60 @@ public class BotonMac : Gtk.Button
         leave_notify_event.connect (() => { dibujo.queue_draw (); return false; });
     }
 
+    /* Busca el botón de la Mac en 2x o 1x según la escala, y lo deja del
+     * tamaño del círculo (Sleep viene de 128 con sombra, los otros de 56). */
+    private Gdk.Pixbuf? cargar_mac (string nombre)
+    {
+        var dir = Environment.get_variable ("SLICK_GREETER_MAC_ICONOS") ?? Path.build_filename (Config.PKGDATADIR, "mac");
+        var escala = get_scale_factor ();
+        foreach (var sufijo in escala > 1 ? new string[] { "@2x", "@1x" } : new string[] { "@1x", "@2x" })
+        {
+            var ruta = Path.build_filename (dir, nombre + sufijo + ".png");
+            if (!FileUtils.test (ruta, FileTest.EXISTS))
+                continue;
+            try
+            {
+                var p = new Gdk.Pixbuf.from_file (ruta);
+                /* Sleep trae el círculo en 115 de 128 px: se escala para que
+                 * su círculo mida lo mismo que el de los otros (54 de 56). */
+                double proporcion = nombre == "Sleep" ? 128.0 / 115.0 * 54.0 / 56.0 : 1.0;
+                int lado = (int) Math.round (TAM * escala * proporcion);
+                return p.scale_simple (lado, lado, Gdk.InterpType.HYPER);
+            }
+            catch (Error e)
+            {
+                debug ("Botón %s: %s", ruta, e.message);
+            }
+        }
+        return null;
+    }
+
     private bool pintar (Gtk.Widget w, Cairo.Context c)
     {
         var r = TAM / 2.0;
         var encima = (get_state_flags () & Gtk.StateFlags.PRELIGHT) != 0;
+        if (imagen != null)
+        {
+            var escala = get_scale_factor ();
+            double lado = imagen.width / (double) escala;
+            c.save ();
+            c.translate ((TAM - lado) / 2, (TAM - lado) / 2);
+            c.scale (1.0 / escala, 1.0 / escala);
+            Gdk.cairo_set_source_pixbuf (c, imagen, 0, 0);
+            c.paint_with_alpha (encima ? 1.0 : 0.9);
+            c.restore ();
+            return false;
+        }
         c.set_source_rgba (1, 1, 1, encima ? 0.30 : 0.19);
-        c.arc (r, r, r, 0, 2 * Math.PI);
+        c.arc (r, r, r - 1, 0, 2 * Math.PI);
         c.fill ();
 
+        /* Los dibujos están hechos para un círculo de 35 px: se escalan. */
+        double k = TAM / 35.0;
+        c.translate (r, r);
+        c.scale (k, k);
+        r = 17.5;
+        c.translate (-r, -r);
         c.set_source_rgba (1, 1, 1, 0.95);
         c.set_line_width (1.5);
         c.set_line_cap (Cairo.LineCap.ROUND);
