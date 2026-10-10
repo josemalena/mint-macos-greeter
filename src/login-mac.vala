@@ -81,7 +81,20 @@ public class LoginMac : Gtk.Overlay
 
         var usuarios = lista_usuarios ();
         hay_varios = usuarios.length () > 1;
-        if (hay_varios)
+
+        /* Al bloquear (dm-tool lock) o al cambiar de usuario desde una
+         * sesión, LightDM dice quién era: se va directo a esa persona, como
+         * la Mac al bloquear. */
+        var sugerido = SlickGreeter.singleton.test_mode ? null : SlickGreeter.singleton.select_user_hint ();
+        LightDM.User? elegido = null;
+        if (sugerido != null && sugerido != "")
+            foreach (var u in usuarios)
+                if (u.name == sugerido)
+                    elegido = u;
+
+        if (elegido != null)
+            elegir (elegido);
+        else if (hay_varios)
             mostrar_fila ();
         else if (usuarios.length () == 1)
             elegir (usuarios.nth_data (0));
