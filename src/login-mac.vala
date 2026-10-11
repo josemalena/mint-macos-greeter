@@ -129,7 +129,7 @@ public class LoginMac : Gtk.Overlay
         clave = new Gtk.Entry ();
         clave.get_style_context ().add_class ("clave-mac");
         clave.visibility = false;
-        clave.invisible_char = '•';
+        clave.invisible_char = '●';  /* el de la Mac (U+25CF); • (U+2022) a 13 px queda diminuto */
         clave.width_chars = 1;  /* si no, GTK pide más ancho que los 160 */
         clave.set_size_request (ANCHO_CAMPO, ALTO_CAMPO);
         clave.halign = Gtk.Align.CENTER;
