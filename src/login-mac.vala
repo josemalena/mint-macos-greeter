@@ -38,6 +38,7 @@ public class LoginMac : Gtk.Overlay
     private Gtk.Label nombre;
     private Gtk.Entry clave;
     private Gtk.Label guia;
+    private Gtk.Button atras;
     private Gtk.Entry? campo_usuario = null;
     private Gtk.Label pista;
 
@@ -80,7 +81,9 @@ public class LoginMac : Gtk.Overlay
         SlickGreeter.singleton.authentication_complete.connect (completa_cb);
 
         var usuarios = lista_usuarios ();
-        hay_varios = usuarios.length () > 1;
+        /* En prueba, SLICK_GREETER_MAC_FILA=1 enseña la lista aunque haya un solo usuario. */
+        hay_varios = usuarios.length () > 1
+            || (SlickGreeter.singleton.test_mode && Environment.get_variable ("SLICK_GREETER_MAC_FILA") != null);
 
         /* Al bloquear (dm-tool lock) o al cambiar de usuario desde una
          * sesión, LightDM dice quién era: se va directo a esa persona, como
@@ -146,7 +149,6 @@ public class LoginMac : Gtk.Overlay
         con_guia.add_overlay (guia);
         con_guia.set_overlay_pass_through (guia, true);
         con_guia.halign = Gtk.Align.CENTER;
-        con_guia.margin_top = 18;
         clave.changed.connect (() => {
             clave.secondary_icon_pixbuf = clave.text.length > 0 ? flecha () : null;
             guia.visible = clave.text.length == 0;
@@ -156,7 +158,26 @@ public class LoginMac : Gtk.Overlay
             if (pos == Gtk.EntryIconPosition.SECONDARY)
                 enviar ();
         });
-        centro.pack_start (con_guia, false, false, 0);
+        /* La ‹ para volver a la lista (con varios usuarios) a la izquierda del
+         * campo; a la derecha un hueco igual, para que el campo siga centrado. */
+        atras = new Gtk.Button ();
+        atras.relief = Gtk.ReliefStyle.NONE;
+        atras.get_style_context ().add_class ("atras-mac");
+        atras.image = new Gtk.Image.from_pixbuf (flecha (true));
+        atras.set_size_request (26, 26);
+        atras.valign = Gtk.Align.CENTER;
+        atras.focus_on_click = false;
+        atras.no_show_all = true;
+        atras.clicked.connect (() => { cancelar (); });
+        var hueco = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 0);
+        hueco.set_size_request (26, 26);
+        var linea_clave = new Gtk.Box (Gtk.Orientation.HORIZONTAL, 6);
+        linea_clave.halign = Gtk.Align.CENTER;
+        linea_clave.margin_top = 18;
+        linea_clave.pack_start (atras, false, false, 0);
+        linea_clave.pack_start (con_guia, false, false, 0);
+        linea_clave.pack_start (hueco, false, false, 0);
+        centro.pack_start (linea_clave, false, false, 0);
 
         pista = new Gtk.Label ("");
         pista.get_style_context ().add_class ("pista-mac");
@@ -234,21 +255,62 @@ public class LoginMac : Gtk.Overlay
 
     /* El fondo sale del .conf directo. slick-greeter lo pasa por dconf y lo
      * vuelve a leer, y si dconf no puede escribir (un greeter sin bus de
-     * sesión, como el de lightdm --test-mode) queda el fondo de Mint. */
-    private void poner_fondo ()
+     * sesión, como el de lightdm --test-mode) queda el fondo de Mint.
+     *
+     * Como Catalina: la lista de usuarios sale sobre el fondo claro (background-claro)
+     * y al elegir a alguien pasa al oscuro (background-oscuro) con un fundido
+     * (Background lo hace solo cuando cambia el archivo). Sin esas claves,
+     * «background» sirve para las dos. */
+    private KeyFile? conf_fondo = null;
+
+    /* Como la Mac: el fondo oscuro es el de quien tiene el estilo oscuro. La
+     * clave «usuarios-oscuros» (lista separada por «;») la escribe el instalador
+     * mirando el estilo de cada cuenta; sin la clave, todos van a oscuro. */
+    private bool estilo_oscuro (LightDM.User? u)
     {
-        var ruta = Environment.get_variable ("SLICK_GREETER_MAC_CONF") ?? "/etc/lightdm/slick-greeter-mac.conf";
+        if (u == null)
+            return false;
+        if (conf_fondo == null)
+            poner_fondo (false);
         try
         {
-            var k = new KeyFile ();
-            k.load_from_file (ruta, KeyFileFlags.NONE);
-            var fondo = k.get_string ("Greeter", "background");
-            if (fondo != null && fondo != "" && FileUtils.test (fondo, FileTest.EXISTS))
-                background.current_background = fondo;
+            if (conf_fondo != null && conf_fondo.has_key ("Greeter", "usuarios-oscuros"))
+                return u.name in conf_fondo.get_string_list ("Greeter", "usuarios-oscuros");
         }
-        catch (Error e)
+        catch (Error e) {}
+        return true;
+    }
+
+    private void poner_fondo (bool oscuro = false)
+    {
+        if (conf_fondo == null)
         {
-            debug ("Fondo de %s: %s", ruta, e.message);
+            var ruta = Environment.get_variable ("SLICK_GREETER_MAC_CONF") ?? "/etc/lightdm/slick-greeter-mac.conf";
+            try
+            {
+                var k = new KeyFile ();
+                k.load_from_file (ruta, KeyFileFlags.NONE);
+                conf_fondo = k;
+            }
+            catch (Error e)
+            {
+                debug ("Fondo de %s: %s", ruta, e.message);
+                return;
+            }
+        }
+        foreach (var clave_fondo in new string[] { oscuro ? "background-oscuro" : "background-claro", "background" })
+        {
+            try
+            {
+                var fondo = conf_fondo.get_string ("Greeter", clave_fondo);
+                if (fondo != null && fondo != "" && FileUtils.test (fondo, FileTest.EXISTS))
+                {
+                    if (background.current_background != fondo)
+                        background.current_background = fondo;
+                    return;
+                }
+            }
+            catch (Error e) {}
         }
     }
 
@@ -277,6 +339,7 @@ public class LoginMac : Gtk.Overlay
         SlickGreeter.singleton.cancel_authentication ();
         usuario = null;
         otro = false;
+        poner_fondo (false);
         vistas.set_visible_child_name ("fila");
         botones_energia.show ();
         boton_cancelar.hide ();
@@ -340,9 +403,12 @@ public class LoginMac : Gtk.Overlay
         clave.text = "";
         guia.visible = true;
         clave.sensitive = true;
+        poner_fondo (estilo_oscuro (usuario));
         vistas.set_visible_child_name ("usuario");
-        botones_energia.visible = !hay_varios;
-        boton_cancelar.visible = hay_varios;
+        /* Los de abajo siguen (Sleep, Restart, Shut Down); volver es la ‹ del campo. */
+        botones_energia.visible = true;
+        boton_cancelar.visible = false;
+        atras.visible = hay_varios;
         autenticar ();
         clave.grab_focus ();
     }
@@ -519,7 +585,7 @@ public class LoginMac : Gtk.Overlay
     /* ── Dibujos ─────────────────────────────────────────────────────── */
 
     /* La flecha → en un círculo, a la derecha del campo cuando hay texto. */
-    private static Gdk.Pixbuf? flecha ()
+    private static Gdk.Pixbuf? flecha (bool izquierda = false)
     {
         var s = new Cairo.ImageSurface (Cairo.Format.ARGB32, 18, 18);
         var c = new Cairo.Context (s);
@@ -530,11 +596,22 @@ public class LoginMac : Gtk.Overlay
         c.set_line_width (1.4);
         c.set_line_cap (Cairo.LineCap.ROUND);
         c.set_line_join (Cairo.LineJoin.ROUND);
-        c.move_to (5.2, 9);
-        c.line_to (12.6, 9);
-        c.move_to (9.6, 6);
-        c.line_to (12.6, 9);
-        c.line_to (9.6, 12);
+        if (izquierda)
+        {
+            c.move_to (12.8, 9);
+            c.line_to (5.4, 9);
+            c.move_to (8.4, 6);
+            c.line_to (5.4, 9);
+            c.line_to (8.4, 12);
+        }
+        else
+        {
+            c.move_to (5.2, 9);
+            c.line_to (12.6, 9);
+            c.move_to (9.6, 6);
+            c.line_to (12.6, 9);
+            c.line_to (9.6, 12);
+        }
         c.stroke ();
         return Gdk.pixbuf_get_from_surface (s, 0, 0, 18, 18);
     }
@@ -555,6 +632,15 @@ public class LoginMac : Gtk.Overlay
                 font-size: 15px;
                 color: #ffffff;
                 text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+            }
+            button.atras-mac, button.atras-mac:hover, button.atras-mac:active {
+                background: none;
+                background-color: transparent;
+                border: none;
+                box-shadow: none;
+                padding: 0;
+                min-width: 0;
+                min-height: 0;
             }
             entry.clave-mac {
                 font-family: ".SF NS", sans-serif;
