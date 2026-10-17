@@ -281,7 +281,50 @@ public class LoginMac : Gtk.Overlay
         return true;
     }
 
-    private void poner_fondo (bool oscuro = false)
+    /* El usuario de quien se muestra el fondo en la lista: el último que entró (estado del greeter). */
+    private string? ultimo_usuario ()
+    {
+        return SlickGreeter.singleton.test_mode
+            ? Environment.get_variable ("SLICK_GREETER_MAC_ULTIMO")
+            : SlickGreeter.singleton.get_state ("last-user");
+    }
+
+    /* Como la Mac: el login y el bloqueo enseñan el fondo de escritorio de la persona (o de la última que entró).
+     * Cada sesión deja su fondo en «fondos-usuario» (por defecto /var/lib/mint-macos/login-fondos, <usuario>.jpg;
+     * lo escribe login/fondo.sh de mint-macos). Sin ese archivo, el de Catalina de siempre. */
+    private bool poner_fondo_de_usuario (string? login)
+    {
+        if (login == null || login == "" || login.contains ("/"))
+            return false;
+        var dir = "/var/lib/mint-macos/login-fondos";
+        if (conf_fondo != null)
+        {
+            try
+            {
+                if (conf_fondo.has_key ("Greeter", "fondos-usuario"))
+                    dir = conf_fondo.get_string ("Greeter", "fondos-usuario");
+            }
+            catch (Error e) {}
+        }
+        var ruta = Path.build_filename (dir, login + ".jpg");
+        if (!FileUtils.test (ruta, FileTest.IS_REGULAR))
+            return false;
+        // El instalador deja un archivo vacío por usuario (solo el dueño puede escribirlo): vacío = sin fondo exportado todavía.
+        try
+        {
+            if (File.new_for_path (ruta).query_info ("standard::size", FileQueryInfoFlags.NONE).get_size () == 0)
+                return false;
+        }
+        catch (Error e)
+        {
+            return false;
+        }
+        if (background.current_background != ruta)
+            background.current_background = ruta;
+        return true;
+    }
+
+    private void poner_fondo (bool oscuro = false, string? login = null)
     {
         if (conf_fondo == null)
         {
@@ -298,6 +341,8 @@ public class LoginMac : Gtk.Overlay
                 return;
             }
         }
+        if (poner_fondo_de_usuario (login ?? ultimo_usuario ()))
+            return;
         foreach (var clave_fondo in new string[] { oscuro ? "background-oscuro" : "background-claro", "background" })
         {
             try
@@ -403,7 +448,7 @@ public class LoginMac : Gtk.Overlay
         clave.text = "";
         guia.visible = true;
         clave.sensitive = true;
-        poner_fondo (estilo_oscuro (usuario));
+        poner_fondo (estilo_oscuro (usuario), usuario != null ? usuario.name : null);
         vistas.set_visible_child_name ("usuario");
         /* Los de abajo siguen (Sleep, Restart, Shut Down); volver es la ‹ del campo. */
         botones_energia.visible = true;
@@ -492,6 +537,8 @@ public class LoginMac : Gtk.Overlay
         if (ok)
         {
             var sesion = (usuario != null && usuario.session != null) ? usuario.session : SlickGreeter.get_default_session ();
+            if (usuario != null && !SlickGreeter.singleton.test_mode)
+                SlickGreeter.singleton.set_state ("last-user", usuario.name);   // el login siguiente enseña su fondo
             if (!SlickGreeter.singleton.start_session (sesion, background))
             {
                 pista.label = "Could not start the session.";
